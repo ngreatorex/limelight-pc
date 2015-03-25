@@ -9,11 +9,13 @@ import com.limelight.nvstream.NvConnectionListener.Stage;
 import com.limelight.nvstream.StreamConfiguration;
 
 import javax.swing.*;
+
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
 import java.awt.image.BufferedImage;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -88,16 +90,14 @@ public class StreamFrame extends JFrame {
 		contentPane.setLayout(new BorderLayout());
 		contentPane.add(renderingSurface, "Center");
 		
-		if (fullscreen) {
-			makeFullScreen(streamConfig);
-			
-			// OS X hack for full-screen losing focus
-			if (System.getProperty("os.name").contains("Mac OS X")) {
-				this.setVisible(false);
-				this.setVisible(true);
-			}
+		if (System.getProperty("os.name").contains("Mac OS X")) {
+			// Enable user option to enter full screen mode using window chrome
+			enableOSXFullScreen(this);
 		}
-		else {
+		
+		if (fullscreen && !System.getProperty("os.name").contains("Mac OS X")) {
+			makeFullScreen(streamConfig);
+		} else {
 			this.setVisible(true);
 			
 			// Only fill the available screen area (excluding taskbar, etc)
@@ -116,6 +116,10 @@ public class StreamFrame extends JFrame {
 			if (streamConfig.getWidth() + windowInsetWidth > maxWidth &&
 					streamConfig.getHeight() + windowInsetHeight > maxHeight) {
 				setExtendedState(JFrame.MAXIMIZED_BOTH);
+			}
+			
+			if (fullscreen) {
+				requestToggleFullScreen(this);
 			}
 		}
 
@@ -180,6 +184,35 @@ public class StreamFrame extends JFrame {
 		
 		return bestConfig;
 	}
+	
+	@SuppressWarnings({"unchecked", "rawtypes"})
+    public static void enableOSXFullScreen(Window window) {
+        try {
+            Class util = Class.forName("com.apple.eawt.FullScreenUtilities");
+            Class params[] = new Class[]{Window.class, Boolean.TYPE};
+            Method method = util.getMethod("setWindowCanFullScreen", params);
+            method.invoke(util, window, true);
+        } catch (Exception e) {
+        	LimeLog.warning("An exception occurred while trying to enable full screen: " + e.getMessage());
+        }
+    }
+ 
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static void requestToggleFullScreen(Window window)
+    {
+        try {
+            Class appClass = Class.forName("com.apple.eawt.Application");
+            Class params[] = new Class[]{};
+ 
+            Method getApplication = appClass.getMethod("getApplication", params);
+            Object application = getApplication.invoke(appClass);
+            Method requestToggleFullScreen = application.getClass().getMethod("requestToggleFullScreen", Window.class);
+ 
+            requestToggleFullScreen.invoke(application, window);
+        } catch (Exception e) {
+        	LimeLog.warning("An exception occurred while trying to toggle full screen mode: " + e.getMessage());
+        }
+    }
 	
 	private void makeFullScreen(StreamConfiguration streamConfig) {
 		GraphicsDevice gd = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
